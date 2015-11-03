@@ -15,6 +15,7 @@ namespace CowAntiMelee
         private static int DodgeRange => _menu.Item("antiMeleeRange").GetValue<Slider>().Value;
         private static bool _blockAttack;
         private static Menu _menu;
+        private static int _dodgeTime;
 
         static void Main()
         {
@@ -37,6 +38,16 @@ namespace CowAntiMelee
 
             Game.OnUpdate += OnUpdate;
             Obj_AI_Base.OnIssueOrder += OnIssueOrder;
+            Drawing.OnDraw += OnDraw;
+        }
+
+        private static void OnDraw(EventArgs args)
+        {
+            if (Utils.GameTimeTickCount - _dodgeTime <= 1000)
+            {
+                var wts = Drawing.WorldToScreen(Player.Position);
+                Drawing.DrawText(wts.X, wts.Y, System.Drawing.Color.Red, "Anti Melee Activated");
+            }
         }
 
         private static void OnIssueOrder(Obj_AI_Base sender, GameObjectIssueOrderEventArgs args)
@@ -44,7 +55,7 @@ namespace CowAntiMelee
             if (!sender.IsMe)
                 return;
 
-            if (_blockAttack && args.Order == GameObjectOrder.AttackUnit)
+            if (_blockAttack && args.IsAttackMove)
             {
                 args.Process = false;
             }
@@ -64,7 +75,7 @@ namespace CowAntiMelee
 
         private static void OnUpdate(EventArgs args)
         {
-            if (Player.ChampionName == "Draven")
+            if (Player.ChampionName == "Draven" || Player.IsMelee || !_menu.Item("positioningAssistant").GetValue<bool>())
                 return;
 
             _orbwalker = Orbwalking.Orbwalker.Instances.FirstOrDefault();
@@ -72,13 +83,9 @@ namespace CowAntiMelee
             if (_orbwalker == null)
                 return;
 
-            if (Player.IsMelee)
-            {
-                _orbwalker.SetOrbwalkingPoint(new Vector3());
-                return;
-            }
+            _orbwalker.SetOrbwalkingPoint(Vector3.Zero);
 
-            foreach (var enemy in Enemies.Where(enemy => enemy.IsMelee && enemy.IsValidTarget(DodgeRange) && enemy.IsFacing(Player) && _menu.Item("posAssistant" + enemy.ChampionName).GetValue<bool>()))
+            foreach (var enemy in Enemies.Where(enemy => enemy.IsMelee && enemy.IsValidTarget(DodgeRange) && enemy.IsFacing(Player)  && _menu.Item("posAssistant" + enemy.ChampionName).GetValue<bool>()))
             {
                 if (Player.FlatMagicDamageMod > Player.FlatPhysicalDamageMod)
                     _blockAttack = true;
@@ -97,7 +104,6 @@ namespace CowAntiMelee
                 if (enemy.Distance(bestPoint) > DodgeRange)
                 {
                     _orbwalker.SetOrbwalkingPoint(bestPoint);
-
                 }
                 else
                 {
@@ -105,10 +111,9 @@ namespace CowAntiMelee
                     if (fastPoint.CountEnemiesInRange(DodgeRange) <= Player.CountEnemiesInRange(DodgeRange))
                         _orbwalker.SetOrbwalkingPoint(fastPoint);
                 }
+                _dodgeTime = Utils.GameTimeTickCount;
                 return;
             }
-
-            _orbwalker.SetOrbwalkingPoint(new Vector3());
 
             if (_blockAttack)
                 _blockAttack = false;
